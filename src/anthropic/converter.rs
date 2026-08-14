@@ -278,7 +278,7 @@ fn normalize_claude_model(model: &str) -> Option<String> {
     Some(format!("claude-{}-{}", parts[family_index], version))
 }
 
-/// 模型映射：自定义别名优先，已知 Claude 格式规范化，其余合法 ID 原样透传。
+/// 模型映射：自定义别名优先，已知 Claude 格式规范化并做活跃别名重写，其余合法 ID 原样透传。
 pub fn map_model(model: &str) -> Option<String> {
     if invalid_model_reason(model).is_some() {
         return None;
@@ -289,7 +289,15 @@ pub fn map_model(model: &str) -> Option<String> {
         return Some(custom.backend_id.clone());
     }
 
-    normalize_claude_model(model).or_else(|| Some(model.to_string()))
+    let mapped = normalize_claude_model(model).or_else(|| Some(model.to_string()))?;
+
+    // 智能别名重写：将标准 Anthropic 3.x 别名映射至 Kiro 当前最高可用的活跃模型
+    match mapped.as_str() {
+        "claude-sonnet-3.5" | "claude-sonnet-3.7" => Some("claude-sonnet-4.6".to_string()),
+        "claude-opus-3" => Some("claude-opus-5".to_string()),
+        "claude-haiku-3.5" => Some("claude-haiku-4.5".to_string()),
+        _ => Some(mapped),
+    }
 }
 
 /// 根据模型名称返回对应的上下文窗口大小
@@ -1952,7 +1960,7 @@ mod tests {
         assert_eq!(get_context_window_size("claude-sonnet-5"), 1_000_000);
         assert_eq!(
             map_model("claude-3-5-sonnet-20241022"),
-            Some("claude-sonnet-3.5".to_string())
+            Some("claude-sonnet-4.6".to_string())
         );
     }
 
